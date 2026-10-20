@@ -41,7 +41,7 @@ G2.sync = async (o = {}) => {
     G2.lastSync = Date.now(); ls.set('ytha.lastSync', G2.lastSync); busy(''); await load(); toast(`同期完了: ${num(res.n)}件を取得 → 新規${num(S.raw.length - before)}件`);
   } catch (e) { busy(''); err(e, '同期'); } finally { G2.syncing = false; }
 };
-if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener(m => { if (m.type === 'sync-progress' && G2.syncing) busy(`履歴を読み込み中… ${num(m.n)}件`, .5); if (m.type === 'synced' && !G2.syncing) load(); });
+if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener(m => { if (m.type === 'sync-progress' && (G2.syncing || G2.csyncing)) busy(`履歴を読み込み中… ${num(m.n)}件`, .5); if (m.type === 'synced' && !G2.syncing) load(); });
 G2.acts.sync = () => G2.sync({});
 G2.acts.syncd = v => G2.sync({ days: +v });
 
@@ -49,7 +49,7 @@ G2.acts.syncd = v => G2.sync({ days: +v });
 G2.modal = h => { const m = $('#modal'); m.innerHTML = `<div class="mbox"><button class="mx" data-g="mclose">✕</button>${h}</div>`; m.hidden = false; };
 G2.acts.mclose = () => { $('#modal').hidden = true; };
 G2.openVideo = id => {
-  const v = G2.videos().get(id) || { id, title: id, ch: '', n: 0, dates: [], first: '-', last: '-', g: '' }, m = G2.getMeta(id), ds = [...new Set(v.dates.map(x => x.slice(0, 10)))].map(dnOf).sort((a, b) => a - b);
+  const v = G2.videos().get(id) || (G2.cvinfo && G2.cvinfo(id)) || { id, title: id, ch: '', n: 0, dates: [], first: '-', last: '-', g: '' }, m = G2.getMeta(id), ds = [...new Set(v.dates.map(x => x.slice(0, 10)))].map(dnOf).sort((a, b) => a - b);
   const gap = ds.length > 1 ? Math.round((ds[ds.length - 1] - ds[0]) / (ds.length - 1)) + '日' : '-', mo = cnt(v.dates, x => x.slice(0, 7)), ks = [...mo.keys()].sort();
   G2.modal(`<div class="vc big">${vthumb(v)}<div><h3>${esc(v.title)}</h3><div class="sub">${esc(v.ch)} ${pill(v.g)}</div></div></div>` +
     kcs([['通算視聴回数', v.n + '回'], ['初回', v.first], ['最終', v.last], ['平均間隔', gap], ['最大進捗', v.pmax != null ? v.pmax + '%' : '-'], ['長さ', v.dur != null ? hm(v.dur) : '-']]) +
@@ -77,9 +77,9 @@ G2.vlist = () => {
     const m = G2.meta.get(v.id) || {}, c = f.chip;
     if (f.g && v.g !== f.g) return; if (q && !(v.title + ' ' + v.ch).toLowerCase().includes(q)) return;
     if (c === 'rw' && v.n < 2) return; if (c === 'rw5' && v.n < 5) return; if (c === 'unf' && !(v.pmax != null && v.pmax < 50)) return; if (c === 'long' && !(v.dur >= 1800)) return;
-    if (c === 'star' && !m.star) return; if (c === 'memo' && !m.note) return; if (c === 'rv' && !m.rv) return; out.push(v);
+    if (c === 'star' && !m.star) return; if (c === 'memo' && !m.note) return; if (c === 'rv' && !m.rv) return; if (G2.inColl && ((c === 'liked' && !G2.inColl(v.id, 'liked')) || (c === 'later' && !G2.inColl(v.id, 'later')) || (c === 'inlist' && !G2.inColl(v.id, 'custom')))) return; out.push(v);
   });
-  const so = { n: (a, b) => b.n - a.n || b.last.localeCompare(a.last), r: (a, b) => b.r - a.r || b.n - a.n, last: (a, b) => b.last.localeCompare(a.last), first: (a, b) => a.first.localeCompare(b.first), secs: (a, b) => b.secs - a.secs, prog: (a, b) => (b.pmax || 0) - (a.pmax || 0) }[f.sort];
+  const so = { n: (a, b) => b.n - a.n || b.last.localeCompare(a.last), r: (a, b) => b.r - a.r || b.n - a.n, last: (a, b) => b.last.localeCompare(a.last), first: (a, b) => a.first.localeCompare(b.first), firstd: (a, b) => b.first.localeCompare(a.first), lasta: (a, b) => a.last.localeCompare(b.last), secs: (a, b) => b.secs - a.secs, prog: (a, b) => (b.pmax || 0) - (a.pmax || 0) }[f.sort];
   return { out: out.sort(so), base };
 };
 G2.videosView = () => {
@@ -88,8 +88,8 @@ G2.videosView = () => {
   const extra = rw.reduce((s, v) => s + (v.n - 1) * (v.dur || 0), 0);
   return rangeBar() + kcs([['動画数', num(base.length)], ['再視聴した動画(2回〜)', `${num(rw.length)} (${pct(rw.length, base.length)})`], ['最多視聴', mx ? mx.n + '回' : '-'], ['平均視聴回数', base.length ? (base.reduce((s, v) => s + v.n, 0) / base.length).toFixed(2) : '-'], ['再視聴に使った時間', hrs(extra)]]) +
     `<div class="g2">${card('視聴回数の分布', bars(dist))}${card('最も繰り返し見た動画 TOP10', bars(base.slice().sort((a, b) => b.n - a.n).slice(0, 10).map(v => [v.title, v.n])))}</div>` +
-    `<div class="rb"><input data-g="vq" placeholder="タイトル・チャンネルで検索" value="${esc(f.q)}" size="30"><select data-g="vg"><option value="">全ジャンル</option>${GENRES.map(g => `<option ${f.g === g ? 'selected' : ''}>${g}</option>`).join('')}</select><select data-g="vsort">${[['n', '通算回数順'], ['r', '期間内回数順'], ['last', '最近見た順'], ['first', '初めて見た順'], ['secs', '総再生時間順'], ['prog', '進捗順']].map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${gchip(f.scope === 'range' ? '対象: 期間内' : '対象: 全期間', 'vscope', f.scope === 'range' ? 'all' : 'range', '')}<button data-g="vcsv">CSV</button></div>` +
-    `<div class="rb">${[['', 'すべて'], ['rw', '再視聴(2回〜)'], ['rw5', '5回以上'], ['unf', '未完(進捗50%未満)'], ['long', '長尺(30分〜)'], ['star', '★'], ['memo', 'メモあり'], ['rv', '復習中']].map(([v, l]) => gchip(l, 'vchip', v, f.chip)).join('')}</div><div class="card" id="vt"></div>`;
+    `<div class="rb"><input data-g="vq" placeholder="タイトル・チャンネルで検索" value="${esc(f.q)}" size="30"><select data-g="vg"><option value="">全ジャンル</option>${GENRES.map(g => `<option ${f.g === g ? 'selected' : ''}>${g}</option>`).join('')}</select><select data-g="vsort">${[['n', '通算回数順'], ['r', '期間内回数順'], ['last', '最近見た順'], ['first', '初めて見た順(古い順)'], ['firstd', '初めて見た順(新しい順)'], ['lasta', '最後に見た順(古い順)'], ['secs', '総再生時間順'], ['prog', '進捗順']].map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${gchip(f.scope === 'range' ? '対象: 期間内' : '対象: 全期間', 'vscope', f.scope === 'range' ? 'all' : 'range', '')}<button data-g="vcsv">CSV</button></div>` +
+    `<div class="rb">${[['', 'すべて'], ['rw', '再視聴(2回〜)'], ['rw5', '5回以上'], ['unf', '未完(進捗50%未満)'], ['long', '長尺(30分〜)'], ['star', '★'], ['memo', 'メモあり'], ['rv', '復習中'], ...(G2.colls && G2.colls.length ? [['liked', '👍高評価'], ['later', '🕒後で見る'], ['inlist', '📁リスト']] : [])].map(([v, l]) => gchip(l, 'vchip', v, f.chip)).join('')}</div><div class="card" id="vt"></div>`;
 };
 G2.drawVideos = () => {
   const el = $('#vt'); if (!el) return; const f = G2.vf, { out } = G2.vlist(), PS = 50, pages = Math.max(1, Math.ceil(out.length / PS)); f.page = Math.min(f.page, pages - 1);

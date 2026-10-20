@@ -5,7 +5,9 @@
 const YS = {
   AK: ['k', 'd', 't', 'kind', 'id', 'title', 'ch', 'chid', 'dur', 'pr', 'prod', 'sh'],
   clean(r) { const o = {}; for (const k of YS.AK) if (r[k] !== undefined) o[k] = r[k]; return o; },
-  build(s) { return { fmt: 'ytha-sync', v: 1, at: Date.now(), device: s.device, acts: s.acts.map(YS.clean), vmeta: s.vmeta, lists: s.lists, ov: s.ov, cfg: s.cfg }; },
+  build(s) { return { fmt: 'ytha-sync', v: 1, at: Date.now(), device: s.device, acts: s.acts.map(YS.clean), vmeta: s.vmeta, lists: s.lists, ov: s.ov, cfg: s.cfg, coll: s.coll || [], lyrics: s.lyrics || [] }; },
+  // コレクション取込: 追加日は前回のスナップショットから引き継ぎ、新規は取込日
+  mergeColl(prev, inc, today) { const old = new Map(((prev && prev.items) || []).map(x => [x.id, x])); const items = inc.items.map(x => ({ ...x, added: x.added || (old.get(x.id) && old.get(x.id).added) || today })); return { ...inc, items, upd: Date.now() }; },
   newer(localMap, arr) { return (arr || []).filter(r => r && r.id && (!localMap.has(r.id) || (r.upd || 0) > (localMap.get(r.id).upd || 0))); },
   async gz(str) {
     if (typeof CompressionStream === 'undefined' || typeof Blob === 'undefined' || !Blob.prototype.stream) return new TextEncoder().encode(str);

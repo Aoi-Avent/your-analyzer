@@ -10,8 +10,8 @@ G2.peers = () => ls.get('ytha.peers', {});
 
 /* --- 端末内の変更を検出してジャンル修正(ov)に更新時刻を付ける --- */
 G2.ovStamp = () => { const snap = ls.get('ytha.ovsnap', {}), ovt = ls.get('ytha.ovt', {}); new Set([...Object.keys(S.ov), ...Object.keys(snap)]).forEach(k => { if (S.ov[k] !== snap[k]) ovt[k] = Date.now(); }); ls.set('ytha.ovt', ovt); ls.set('ytha.ovsnap', { ...S.ov }); return ovt; };
-G2.localState = () => { const ovt = G2.ovStamp(), ov = {}; Object.keys(ovt).forEach(k => { ov[k] = [S.ov[k] ?? null, ovt[k]]; }); return { device: G2.dev, acts: S.raw, vmeta: [...G2.meta.values()], lists: G2.listsAll, ov, cfg: { t: G2.cfg.t || 0, studyGenres: G2.cfg.studyGenres, goalH: G2.cfg.goalH } }; };
-G2.sig = () => [S.raw.length, S.raw.length ? S.raw[S.raw.length - 1].k : '', G2.meta.size, [...G2.meta.values()].reduce((m, x) => Math.max(m, x.upd || 0), 0), G2.listsAll.length, G2.listsAll.reduce((m, x) => Math.max(m, x.upd || 0), 0), Object.values(G2.ovStamp()).reduce((m, x) => Math.max(m, x), 0), G2.cfg.t || 0].join('|');
+G2.localState = () => { const ovt = G2.ovStamp(), ov = {}; Object.keys(ovt).forEach(k => { ov[k] = [S.ov[k] ?? null, ovt[k]]; }); return { device: G2.dev, acts: S.raw, vmeta: [...G2.meta.values()], lists: G2.listsAll, ov, cfg: { t: G2.cfg.t || 0, studyGenres: G2.cfg.studyGenres, goalH: G2.cfg.goalH }, coll: G2.colls || [], lyrics: G2.lyrList ? G2.lyrList() : [] }; };
+G2.sig = () => [S.raw.length, S.raw.length ? S.raw[S.raw.length - 1].k : '', G2.meta.size, [...G2.meta.values()].reduce((m, x) => Math.max(m, x.upd || 0), 0), G2.listsAll.length, G2.listsAll.reduce((m, x) => Math.max(m, x.upd || 0), 0), Object.values(G2.ovStamp()).reduce((m, x) => Math.max(m, x), 0), G2.cfg.t || 0, G2.extraSig ? G2.extraSig() : ''].join('|');
 
 /* --- 他端末のデータを取り込む(履歴=和集合 / その他=更新が新しい方) --- */
 G2.apply = async b => {
@@ -19,15 +19,16 @@ G2.apply = async b => {
   const have = new Set(S.raw.map(r => r.k)), nr = (b.acts || []).filter(r => r && r.k && r.d && !have.has(r.k)); if (nr.length) { await putMany('acts', nr); st.rows = nr.length; }
   const nm = YS.newer(G2.meta, b.vmeta); if (nm.length) { await putMany('vmeta', nm); st.meta = nm.length; }
   const nl = YS.newer(new Map(G2.listsAll.map(x => [x.id, x])), b.lists); if (nl.length) { await putMany('lists', nl); st.lists = nl.length; }
+  if (G2.applyExtra) { const ex = await G2.applyExtra(b); st.coll = ex.coll; st.lyrics = ex.lyrics; }
   const ovt = ls.get('ytha.ovt', {}); Object.entries(b.ov || {}).forEach(([k, v]) => { if (Array.isArray(v) && v[1] > (ovt[k] || 0)) { if (v[0] == null) delete S.ov[k]; else S.ov[k] = v[0]; ovt[k] = v[1]; st.ov++; } });
   if (st.ov) { ls.set('ytha.ov', S.ov); ls.set('ytha.ovt', ovt); ls.set('ytha.ovsnap', { ...S.ov }); }
   if (b.cfg && b.cfg.t > (G2.cfg.t || 0)) { G2.cfg.studyGenres = b.cfg.studyGenres || G2.cfg.studyGenres; G2.cfg.goalH = b.cfg.goalH || G2.cfg.goalH; G2.cfg.t = b.cfg.t; ls.set('ytha.cfg', G2.cfg); st.cfg = 1; }
   if (b.device && b.device.id) { const p = G2.peers(); p[b.device.id] = { name: b.device.name, at: b.at }; ls.set('ytha.peers', p); }
   return st;
 };
-const changed = st => st.rows || st.meta || st.lists || st.ov || st.cfg;
+const changed = st => st.rows || st.meta || st.lists || st.ov || st.cfg || st.coll || st.lyrics;
 const sumSt = (a, b) => { Object.keys(b).forEach(k => { a[k] = (a[k] || 0) + b[k]; }); return a; };
-const describe = st => [st.rows && `履歴${num(st.rows)}件`, st.meta && `メモ/復習${num(st.meta)}件`, st.lists && `プレイリスト${st.lists}件`, st.ov && `ジャンル修正${st.ov}件`].filter(Boolean).join('・') || '変更なし';
+const describe = st => [st.rows && `履歴${num(st.rows)}件`, st.meta && `メモ/復習${num(st.meta)}件`, st.lists && `プレイリスト${st.lists}件`, st.ov && `ジャンル修正${st.ov}件`, st.coll && `コレクション${st.coll}件`, st.lyrics && `歌詞${st.lyrics}件`].filter(Boolean).join('・') || '変更なし';
 
 /* --- 同期ファイルの書き出し/読み込み(全端末で使える方式) --- */
 G2.exportFile = async share => {

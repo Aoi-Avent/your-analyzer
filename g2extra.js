@@ -29,8 +29,8 @@ G2.palDraw = q => {
   $('#palr').innerHTML = out.slice(0, 22).join('') || '<p class="sub">見つかりません</p>';
 };
 G2.inp.palq = t => G2.palDraw(t.value);
-G2.acts.palgo = v => { G2.acts.mclose(); S.view = v; S.ch = null; render(); window.scrollTo(0, 0); };
-G2.acts.palch = v => { G2.acts.mclose(); S.ch = v; S.view = 'channel'; render(); window.scrollTo(0, 0); };
+G2.acts.palgo = v => { G2.acts.mclose(); S.view = v; S.ch = null; render(); G2.scrollTop(); };
+G2.acts.palch = v => { G2.acts.mclose(); S.ch = v; S.view = 'channel'; render(); G2.scrollTop(); };
 G2.acts.help = () => G2.modal(`<h3>ショートカット</h3>${tbl(['キー', '動作'], [['Ctrl/⌘ + K', '画面・動画・チャンネルを検索'], ['?', 'このヘルプ'], ['Esc', '閉じる'], ['Space', '再生/一時停止(プレーヤー表示中)'], ['N / P', '次の曲 / 前の曲']])}<h3 style="margin-top:12px">ヒント</h3><ul class="sub"><li>動画名をクリックすると、視聴日・メモ・★・復習・プレイリスト追加ができます</li><li>チャンネル画面のプルダウンでジャンルを直すと、そのチャンネル全体に反映されます</li><li>「勉強」タブで復習を続けると、記憶が定着するタイミングで思い出せます</li></ul>`);
 const typing = e => ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); G2.acts.palette(); } else if (e.key === '?' && !typing(e)) G2.acts.help(); });

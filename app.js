@@ -21,7 +21,7 @@ const tick = () => new Promise(r => setTimeout(r));
 
 /* ===== IndexedDB ===== */
 let _db;
-const open = () => _db ||= new Promise((res, rej) => { const r = indexedDB.open('ytha', 2); r.onupgradeneeded = () => { const d = r.result; [['acts', 'k'], ['files', 'name'], ['vmeta', 'id'], ['lists', 'id']].forEach(([n, k]) => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k }); }); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('DBがブロックされています')); });
+const open = () => _db ||= new Promise((res, rej) => { const r = indexedDB.open('ytha', 3); r.onupgradeneeded = () => { const d = r.result; [['acts', 'k'], ['files', 'name'], ['vmeta', 'id'], ['lists', 'id'], ['coll', 'id'], ['lyrics', 'id']].forEach(([n, k]) => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: k }); }); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('DBがブロックされています')); });
 const run = async (st, mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction(st, mode); let o; try { o = fn(t.objectStore(st)); } catch (e) { rej(e); return; } t.oncomplete = () => res(o && 'result' in o ? o.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('abort')); }); };
 const getAll = st => run(st, 'readonly', s => s.getAll());
 const putMany = async (st, rows) => { for (let i = 0; i < rows.length; i += 3000) await run(st, 'readwrite', s => { rows.slice(i, i + 3000).forEach(r => s.put(r)); }); };
@@ -256,10 +256,10 @@ async function restore(file) {
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-a]'); if (!t || t.tagName === 'SELECT' || t.tagName === 'INPUT') return; const a = t.dataset.a, v = t.dataset.v; e.preventDefault();
   try {
-    if (a === 'nav') { S.view = v; S.ch = null; window.scrollTo(0, 0); }
+    if (a === 'nav') { S.view = v; S.ch = null; (typeof G2 !== 'undefined' && G2.scrollTop ? G2.scrollTop() : window.scrollTo(0, 0)); }
     else if (a === 'range') { if (v === 'custom') { const sp = span(); S.from = dstr(sp.a); S.to = dstr(sp.b); } S.range = v; }
     else if (a === 'metric') S.metric = v; else if (a === 'genre') S.genre = v;
-    else if (a === 'chan') { S.ch = v; S.view = 'channel'; window.scrollTo(0, 0); }
+    else if (a === 'chan') { S.ch = v; S.view = 'channel'; (typeof G2 !== 'undefined' && G2.scrollTop ? G2.scrollTop() : window.scrollTo(0, 0)); }
     else if (a === 'page') { S.f.page = +v; }
     else if (a === 'export') { doExport(v); return; }
     else if (a === 'pick') { $('#file').click(); return; } else if (a === 'restore') { $('#rfile').click(); return; }
